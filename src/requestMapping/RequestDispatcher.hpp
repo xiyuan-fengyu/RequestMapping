@@ -5,12 +5,10 @@
 #ifndef REQUESTMAPPING_REQUESTDISPATCHER_HPP
 #define REQUESTMAPPING_REQUESTDISPATCHER_HPP
 
-#include <rapidjson/document.h>
 #include <functional>
-#include <utility>
 #include <vector>
 #include <regex>
-#include "util/JsonUtil.hpp"
+#include <json.hpp>
 
 namespace xiyuan {
 
@@ -21,7 +19,7 @@ namespace xiyuan {
         explicit PathInfo(const std::string &path) : path(std::move(path)) {}
     };
 
-    typedef std::function<void(const xiyuan::PathInfo &pathInfo, const rapidjson::Document &request, const rapidjson::Document &response)> HandlerMethod;
+    typedef std::function<void(const xiyuan::PathInfo &pathInfo, nlohmann::json &request, nlohmann::json &response)> HandlerMethod;
 
     class Handler {
     public:
@@ -48,7 +46,7 @@ namespace xiyuan {
         return handler;
     }
 
-    void dispatch(const std::string &path, const rapidjson::Document &request, const rapidjson::Document &response) {
+    void dispatch(const std::string &path, nlohmann::json &request, nlohmann::json &response) {
         try {
             auto it = handlers.begin();
             for (; it != handlers.end(); ++it) {
@@ -73,11 +71,13 @@ namespace xiyuan {
             }
         }
         catch (std::exception &e) {
-            JsonUtil::response(response, request, false, "inner exception", nullptr);
+            response["success"] = false;
+            response["message"] = e.what()[0] == '\0' ? "inner exception" : e.what();
             return;
         }
 
-        JsonUtil::response(response, request, false, "not found", nullptr);
+        response["success"] = false;
+        response["message"] = "not found";
     }
 
 }

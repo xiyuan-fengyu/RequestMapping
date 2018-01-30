@@ -12,7 +12,6 @@ else ()
 
 endif ()
 
-
 include_directories(src)
 include_directories(${PROJECT_BINARY_DIR}/src)
 
