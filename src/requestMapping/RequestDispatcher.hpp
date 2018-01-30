@@ -6,69 +6,79 @@
 #define REQUESTMAPPING_REQUESTDISPATCHER_HPP
 
 #include <rapidjson/document.h>
-#include <unordered_map>
+#include <functional>
+#include <utility>
+#include <vector>
+#include <regex>
 #include "util/JsonUtil.hpp"
 
 namespace xiyuan {
 
-    typedef void(*HandlerMethod)(const std::string &path, const rapidjson::Document &request, const rapidjson::Document &response);
-
-    struct Handler {
-        bool exactMatch;
-        HandlerMethod method;
+    class PathInfo {
+    public:
+        std::string path;
+        std::vector<std::string> pathParams {};
+        explicit PathInfo(const std::string &path) : path(std::move(path)) {}
     };
 
-    class RequestDispatcher {
+    typedef std::function<void(const xiyuan::PathInfo &pathInfo, const rapidjson::Document &request, const rapidjson::Document &response)> HandlerMethod;
 
-        typedef std::unordered_map<std::string, Handler> HandlerMap;
-
-        HandlerMap handlers;
-
-        explicit RequestDispatcher() = default;
-
+    class Handler {
     public:
-        static RequestDispatcher instance;
+        std::string path;
+        std::regex pathReg;
+        bool exactMatch;
+        HandlerMethod method;
 
-        RequestDispatcher(const std::string &path, bool exactMatch, HandlerMethod method) noexcept {
-            Handler handler { exactMatch, method };
-            instance.handlers[path] = handler;
+        Handler(const std::string &path, bool exactMatch, const HandlerMethod &method) {
+            this->path = path;
+            this->exactMatch = exactMatch;
+            if (!exactMatch) {
+                pathReg = std::regex(path);
+            }
+            this->method = method;
         }
+    };
 
-        void dispatch(const std::string &path, const rapidjson::Document &request, const rapidjson::Document &response) {
-            try {
-                auto it = handlers.begin();
-                for (; it != handlers.end(); ++it) {
-                    std::string hPath = it->first;
-                    HandlerMethod hMethod = it->second.method;
-                    bool exactMatch = it->second.exactMatch;
-                    if (exactMatch) {
-                        if (hPath == path) {
-                            hMethod(path, request, response);
-                            return;
+    std::vector<Handler> handlers;
+
+    Handler add(const char *path, bool exactMatch, const HandlerMethod &method) noexcept {
+        Handler handler(path, exactMatch, method);
+        handlers.push_back(handler);
+        return handler;
+    }
+
+    void dispatch(const std::string &path, const rapidjson::Document &request, const rapidjson::Document &response) {
+        try {
+            auto it = handlers.begin();
+            for (; it != handlers.end(); ++it) {
+                std::string hPath = it->path;
+                bool exactMatch = it->exactMatch;
+                if (exactMatch) {
+                    if (hPath == path) {
+                        it->method(PathInfo(path), request, response);
+                        return;
+                    }
+                } else {
+                    std::smatch sm;
+                    if (std::regex_match(path, sm, it->pathReg)) {
+                        PathInfo pathInfo(path);
+                        for (size_t i = 1, size = sm.size(); i <= size; ++i) {
+                            pathInfo.pathParams.push_back(sm[i]);
                         }
-                    } else if (path.find(hPath) == 0) {
-                        hMethod(path, request, response);
+                        it->method(pathInfo, request, response);
                         return;
                     }
                 }
             }
-            catch (std::exception &e) {
-                auto exceptionH = handlers.find("/exception");
-                if (exceptionH != handlers.cend()) {
-                    exceptionH->second.method(path, request, response);
-                } else JsonUtil::response(response, request, false, "inner exception", nullptr);
-                return;
-            }
-
-            auto notFoundH = handlers.find("/notFound");
-            if (notFoundH != handlers.cend()) {
-                notFoundH->second.method(path, request, response);
-            } else JsonUtil::response(response, request, false, "not found", nullptr);
+        }
+        catch (std::exception &e) {
+            JsonUtil::response(response, request, false, "inner exception", nullptr);
+            return;
         }
 
-    };
-
-    RequestDispatcher RequestDispatcher::instance{};
+        JsonUtil::response(response, request, false, "not found", nullptr);
+    }
 
 }
 #endif //REQUESTMAPPING_REQUESTDISPATCHER_HPP
