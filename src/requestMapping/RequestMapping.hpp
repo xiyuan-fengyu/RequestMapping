@@ -12,9 +12,9 @@ namespace xiyuan {
 // 全局函数版本
 #ifndef RequestMapping
 #define RequestMapping(pathMatch, exactMatch, methodName) \
-void handler_##methodName##_callback(const xiyuan::PathInfo &, nlohmann::json &, nlohmann::json &);\
+void handler_##methodName##_callback(const std::vector<std::string> &pathParams, const std::shared_ptr<HttpServer::Request> &request, const std::shared_ptr<HttpServer::Response> &response);\
 auto handler_##methodName = xiyuan::add(pathMatch, exactMatch, &(handler_##methodName##_callback)); /* NOLINT */\
-void handler_##methodName##_callback(const xiyuan::PathInfo &pathInfo, nlohmann::json &request, nlohmann::json &response)
+void handler_##methodName##_callback(const std::vector<std::string> &pathParams, const std::shared_ptr<HttpServer::Request> &request, const std::shared_ptr<HttpServer::Response> &response)
 #endif
 
 }

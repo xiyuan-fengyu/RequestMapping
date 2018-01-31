@@ -5,21 +5,19 @@
 #ifndef REQUESTMAPPING_REQUESTDISPATCHER_HPP
 #define REQUESTMAPPING_REQUESTDISPATCHER_HPP
 
+#include <server_http.hpp>
 #include <functional>
 #include <vector>
 #include <regex>
-#include <json.hpp>
+#include <unordered_map>
 
 namespace xiyuan {
 
-    class PathInfo {
-    public:
-        std::string path;
-        std::vector<std::string> pathParams {};
-        explicit PathInfo(const std::string &path) : path(std::move(path)) {}
-    };
+    using HttpServer = SimpleWeb::Server<SimpleWeb::HTTP>;
 
-    typedef std::function<void(const xiyuan::PathInfo &pathInfo, nlohmann::json &request, nlohmann::json &response)> HandlerMethod;
+    typedef
+    std::function<void(const std::vector<std::string> &pathParams, const std::shared_ptr<HttpServer::Request> &request, const std::shared_ptr<HttpServer::Response> &response)>
+    HandlerMethod;
 
     class Handler {
     public:
@@ -40,44 +38,38 @@ namespace xiyuan {
 
     std::vector<Handler> handlers;
 
-    Handler add(const char *path, bool exactMatch, const HandlerMethod &method) noexcept {
-        Handler handler(path, exactMatch, method);
+    Handler add(const std::string &path, bool exactMatch, const HandlerMethod &method) noexcept {
+        Handler handler(path[path.size() - 1] == '/' ? path.substr(0, path.size() - 1) : path, exactMatch, method);
         handlers.push_back(handler);
         return handler;
     }
 
-    void dispatch(const std::string &path, nlohmann::json &request, nlohmann::json &response) {
-        try {
-            auto it = handlers.begin();
-            for (; it != handlers.end(); ++it) {
-                std::string hPath = it->path;
-                bool exactMatch = it->exactMatch;
-                if (exactMatch) {
-                    if (hPath == path) {
-                        it->method(PathInfo(path), request, response);
-                        return;
+    bool dispatch(const std::shared_ptr<HttpServer::Request> &request, const std::shared_ptr<HttpServer::Response> &response) {
+        auto path = request->path;
+        if (path[path.size() - 1] == '/') path.pop_back();
+        auto it = handlers.begin();
+        std::vector<std::string> pathParams;
+        for (; it != handlers.end(); ++it) {
+            std::string hPath = it->path;
+            bool exactMatch = it->exactMatch;
+            if (exactMatch) {
+                if (hPath == path) {
+                    it->method(pathParams, request, response);
+                    return true;
+                }
+            } else {
+                std::smatch sm;
+                if (std::regex_match(path, sm, it->pathReg)) {
+                    for (size_t i = 1, size = sm.size(); i <= size; ++i) {
+                        pathParams.push_back(sm[i]);
                     }
-                } else {
-                    std::smatch sm;
-                    if (std::regex_match(path, sm, it->pathReg)) {
-                        PathInfo pathInfo(path);
-                        for (size_t i = 1, size = sm.size(); i <= size; ++i) {
-                            pathInfo.pathParams.push_back(sm[i]);
-                        }
-                        it->method(pathInfo, request, response);
-                        return;
-                    }
+                    it->method(pathParams, request, response);
+                    return true;
                 }
             }
         }
-        catch (std::exception &e) {
-            response["success"] = false;
-            response["message"] = e.what()[0] == '\0' ? "inner exception" : e.what();
-            return;
-        }
 
-        response["success"] = false;
-        response["message"] = "not found";
+        return false;
     }
 
 }

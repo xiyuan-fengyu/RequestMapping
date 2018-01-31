@@ -12,9 +12,11 @@ else ()
 
 endif ()
 
+link_libraries(boost_system boost_filesystem)
+
+include_directories(SimpleWebServer)
 include_directories(src)
 include_directories(${PROJECT_BINARY_DIR}/src)
-
 
 function(has_main_method filePath res)
     set (${res} OFF PARENT_SCOPE)
@@ -57,3 +59,9 @@ function(add_executable_with_main)
 endfunction()
 
 add_executable_with_main()
+
+# 复制 web 静态文件
+message("${CMAKE_COMMAND} -E copy_directory ${PROJECT_SOURCE_DIR}/test/web ${PROJECT_BINARY_DIR}/web")
+execute_process(
+        COMMAND ${CMAKE_COMMAND} -E copy_directory ${PROJECT_SOURCE_DIR}/test/web ${PROJECT_BINARY_DIR}/web
+)
