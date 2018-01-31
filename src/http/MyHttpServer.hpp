@@ -26,7 +26,12 @@ namespace xiyuan {
             httpServer.config.port = port;
             httpServer.config.thread_pool_size = threadPoolSize;
 
-            auto fileDispatcher = [](const std::shared_ptr<HttpServer::Response> &response, const std::shared_ptr<HttpServer::Request> &request) {
+            for (auto &handler : xiyuan::handlers) {
+                httpServer.resource[handler.path][handler.httpMethod] = [handler](const std::shared_ptr<HttpServer::Response> &response, const std::shared_ptr<HttpServer::Request> &request) {
+                    handler.method(response, request);
+                };
+            }
+            httpServer.default_resource["GET"] = [](const std::shared_ptr<HttpServer::Response> &response, const std::shared_ptr<HttpServer::Request> &request) {
                 try {
                     auto web_root_path = boost::filesystem::canonical("web");
                     auto path = boost::filesystem::canonical(web_root_path / request->path);
@@ -61,23 +66,6 @@ namespace xiyuan {
                     response->write(SimpleWeb::StatusCode::client_error_bad_request, "not found: " + request->path);
                 }
             };
-
-            //通过 RequestDispatcher 路由
-            auto mainDispatch = [fileDispatcher](const std::shared_ptr<HttpServer::Response> &response, const std::shared_ptr<HttpServer::Request> &request) {
-                auto found = dispatch(request, response);
-                if (!found) {
-                    if (request->method == "GET") {
-                        fileDispatcher(response, request);
-                    }
-                    else {
-                        response->write(SimpleWeb::StatusCode::client_error_bad_request, "Not Found");
-                    }
-                }
-            };
-
-            httpServer.resource["^/.*"]["GET"] = mainDispatch;
-            httpServer.resource["^/.*"]["POST"] = mainDispatch;
-            httpServer.default_resource["GET"] = fileDispatcher;
 
             httpServer.on_error = [](std::shared_ptr<HttpServer::Request> equest, const SimpleWeb::error_code & /*ec*/) {
                 // Handle errors here

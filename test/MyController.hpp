@@ -13,25 +13,31 @@ using namespace std;
 using namespace xiyuan;
 using namespace nlohmann;
 
-RequestMapping("/test", true, root) {
+RequestMapping("/test", GET, root) {
     stringstream ss;
     ss << "Test ok !";
     response->write(ss);
 }
 
-RequestMapping("/test/(\\d+)", false, testId) {
-    json resJ;
-    resJ["success"] = true;
-    resJ["message"] = "ok";
-    resJ["data"] = pathParams[0];
-    response->write(resJ.dump());
+RequestMapping("/test/(\\d+)", GET|POST, testId) {
+    json res;
+    res["success"] = true;
+    res["message"] = "ok";
+    res["data"] = request->path_match[1];
+    response->write(res.dump());
 }
 
-RequestMapping("/test/echo", true, testEcho) {
-    json resJ;
-    resJ["query"] = request->query_string;
-    resJ["content"] = request->content.string();
-    response->write(resJ.dump());
+RequestMapping("/test/get", GET, testGet) {
+    json res;
+    res["query"] = request->query_string;
+    response->write(res.dump());
+}
+
+RequestMapping("/test/post", POST, testPost) {
+    json res;
+    res["query"] = request->query_string;
+    res["content"] = request->content.string();
+    response->write(res.dump());
 }
 
 #endif //REQUESTMAPPING_MYCONTROLLER_HPP
